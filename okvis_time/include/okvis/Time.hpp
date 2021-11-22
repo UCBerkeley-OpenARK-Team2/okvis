@@ -126,13 +126,13 @@ void normalizeSecNSecUnsigned(int64_t& sec, int64_t& nsec);
 template<class T, class D>
 class TimeBase {
  public:
-  uint32_t sec, nsec;
+  uint64_t sec, nsec;
 
   TimeBase()
       : sec(0),
         nsec(0) {
   }
-  TimeBase(uint32_t _sec, uint32_t _nsec)
+  TimeBase(uint64_t _sec, uint64_t _nsec)
       : sec(_sec),
         nsec(_nsec) {
     normalizeSecNSec(sec, nsec);
@@ -161,8 +161,8 @@ class TimeBase {
   }
   ;
   T& fromSec(double t) {
-    sec = (uint32_t) floor(t);
-    nsec = (uint32_t) std::round((t - sec) * 1e9);
+    sec = (uint64_t) floor(t);
+    nsec = (uint64_t) std::round((t - sec) * 1e9);
     return *static_cast<T*>(this);
   }
 
@@ -191,7 +191,7 @@ class Time : public TimeBase<Time, Duration> {
       : TimeBase<Time, Duration>() {
   }
 
-  Time(uint32_t _sec, uint32_t _nsec)
+  Time(uint64_t _sec, uint64_t _nsec)
       : TimeBase<Time, Duration>(_sec, _nsec) {
   }
 
@@ -243,7 +243,7 @@ class WallTime : public TimeBase<WallTime, WallDuration> {
       : TimeBase<WallTime, WallDuration>() {
   }
 
-  WallTime(uint32_t _sec, uint32_t _nsec)
+  WallTime(uint64_t _sec, uint64_t _nsec)
       : TimeBase<WallTime, WallDuration>(_sec, _nsec) {
   }
 
