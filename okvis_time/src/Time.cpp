@@ -93,7 +93,7 @@ const Time TIME_MIN(0, 1);
  * These have only internal linkage to this translation unit.
  * (i.e. not exposed to users of the time classes)
  */
-void okvis_walltime(uint32_t& sec, uint32_t& nsec)
+void okvis_walltime(uint64_t& sec, uint64_t& nsec)
 #ifndef WIN32    
                         throw (NoHighPerformanceTimersException)
 #endif
