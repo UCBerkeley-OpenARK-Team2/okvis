@@ -38,12 +38,14 @@
  * @author Stefan Leutenegger
  */
 
+#include <cstdlib> // read enviroment variable
+#include <string>
+
 #include <okvis/Frontend.hpp>
 
 #include <brisk/brisk.h>
-
+#include <okvis/orb.h>
 #include <opencv2/imgproc/imgproc.hpp>
-
 #include <glog/logging.h>
 
 #include <okvis/ceres/ImuError.hpp>
@@ -79,38 +81,92 @@ Frontend::Frontend(size_t numCameras)
       matcher_(
           std::unique_ptr<okvis::DenseMatcher>(new okvis::DenseMatcher(4))),
       keyframeInsertionOverlapThreshold_(0.6),
-      keyframeInsertionMatchingRatioThreshold_(0.2) {
-  // create mutexes for feature detectors and descriptor extractors
-  for (size_t i = 0; i < numCameras_; ++i) {
-    featureDetectorMutexes_.push_back(
-        std::unique_ptr<std::mutex>(new std::mutex()));
-  }
-  initialiseBriskFeatureDetectors();
+      keyframeInsertionMatchingRatioThreshold_(0.2) 
+{
+    // Set feature type based on enviroment variable
+    // usage: export OKVIS_FEATURE_TYPE=BRISK
+    //        export OKVIS_FEATURE_TYPE=ORB
+    std::string feature_type_str = std::getenv("OKVIS_FEATURE_TYPE");
+    if ( feature_type_str == "ORB" || feature_type_str == "orb" )
+    {
+      feature_type = FEATURE_TYPE::ORB;
+    }
+    // Use brisk by default
+    else
+    {
+      feature_type = FEATURE_TYPE::BRISK;
+    }
+
+    switch( feature_type )
+    {
+        case FEATURE_TYPE::BRISK :
+            initialiseBriskFeatureDetectors();
+            break;
+        case FEATURE_TYPE::ORB :
+            initORBFeatureDetectorDescriptor();
+            break;
+        default:
+            initialiseBriskFeatureDetectors();
+    }
 }
+
+/**
+ * @brief Detect feature and compute descriptor using BRISK
+ * 
+ */
+void Frontend::detectAndDescribeBRISK( size_t cameraIndex, \
+                                       std::shared_ptr<okvis::MultiFrame> frameOut, \
+                                       const okvis::kinematics::Transformation& T_WC )
+{
+    frameOut->setDetector(cameraIndex, featureDetectors_[cameraIndex]);
+    frameOut->setExtractor(cameraIndex, descriptorExtractors_[cameraIndex]);
+
+    frameOut->detect(cameraIndex);
+
+    // ExtractionDirection == gravity direction in camera frame
+    Eigen::Vector3d g_in_W(0, 0, -1);
+    Eigen::Vector3d extractionDirection = T_WC.inverse().C() * g_in_W;
+    frameOut->describe(cameraIndex, extractionDirection);
+}
+
+
+/**
+ * @brief Detect feature and compute descriptor using ORB (DL model)
+ * 
+ */
+void Frontend::detectAndDescribeORB( size_t cameraIndex, \
+                                     std::shared_ptr<okvis::MultiFrame> frameOut )
+{
+    frameOut->setExtractor( cameraIndex, featureDetectorDescriptor_[ cameraIndex ] );
+    frameOut->detectAndDescribe( cameraIndex );
+}
+
 
 // Detection and descriptor extraction on a per image basis.
 bool Frontend::detectAndDescribe(size_t cameraIndex,
                                  std::shared_ptr<okvis::MultiFrame> frameOut,
                                  const okvis::kinematics::Transformation& T_WC,
-                                 const std::vector<cv::KeyPoint> * keypoints) {
-  OKVIS_ASSERT_TRUE_DBG(Exception, cameraIndex < numCameras_, "Camera index exceeds number of cameras.");
-  std::lock_guard<std::mutex> lock(*featureDetectorMutexes_[cameraIndex]);
+                                 const std::vector<cv::KeyPoint> * keypoints)
+{
+    OKVIS_ASSERT_TRUE_DBG(Exception, cameraIndex < numCameras_, "Camera index exceeds number of cameras.");
 
-  // check there are no keypoints here
-  OKVIS_ASSERT_TRUE(Exception, keypoints == nullptr, "external keypoints currently not supported")
+    // Do not support used input keypoint
+    OKVIS_ASSERT_TRUE(Exception, keypoints == nullptr, "external keypoints currently not supported")
 
-  frameOut->setDetector(cameraIndex, featureDetectors_[cameraIndex]);
-  frameOut->setExtractor(cameraIndex, descriptorExtractors_[cameraIndex]);
+    // Based on configuration, call corresbonding feature detection
+    switch( feature_type )
+    {
+        case FEATURE_TYPE::BRISK :
+            detectAndDescribeBRISK( cameraIndex, frameOut, T_WC );
+            break;
+        case FEATURE_TYPE::ORB :
+            detectAndDescribeORB( cameraIndex, frameOut );
+            break;
+        default:
+            detectAndDescribeBRISK( cameraIndex, frameOut, T_WC );
+    }
 
-  frameOut->detect(cameraIndex);
-
-  // ExtractionDirection == gravity direction in camera frame
-  Eigen::Vector3d g_in_W(0, 0, -1);
-  Eigen::Vector3d extractionDirection = T_WC.inverse().C() * g_in_W;
-  frameOut->describe(cameraIndex, extractionDirection);
-
-  // set detector/extractor to nullpointer? TODO
-  return true;
+    return true;
 }
 
 // Matching as well as initialization of landmarks and state.
@@ -809,16 +865,14 @@ int Frontend::runRansac2d2d(okvis::Estimator& estimator,
 }
 
 // (re)instantiates feature detectors and descriptor extractors. Used after settings changed or at startup.
-void Frontend::initialiseBriskFeatureDetectors() {
-  for (auto it = featureDetectorMutexes_.begin();
-      it != featureDetectorMutexes_.end(); ++it) {
-    (*it)->lock();
-  }
+void Frontend::initialiseBriskFeatureDetectors() 
+{
   featureDetectors_.clear();
   descriptorExtractors_.clear();
-  for (size_t i = 0; i < numCameras_; ++i) {
-    featureDetectors_.push_back(
-        std::shared_ptr<cv::FeatureDetector>(
+
+  for (size_t i = 0; i < numCameras_; ++i) 
+  {
+    featureDetectors_.push_back( std::shared_ptr<cv::FeatureDetector>(
 #ifdef __ARM_NEON__
             new cv::GridAdaptedFeatureDetector( 
             new cv::FastFeatureDetector(briskDetectionThreshold_),
@@ -829,17 +883,23 @@ void Frontend::initialiseBriskFeatureDetectors() {
                 briskDetectionAbsoluteThreshold_,
                 briskDetectionMaximumKeypoints_)));
 #endif
-    descriptorExtractors_.push_back(
-        std::shared_ptr<cv::DescriptorExtractor>(
+
+    descriptorExtractors_.push_back( std::shared_ptr<cv::DescriptorExtractor>(
             new brisk::BriskDescriptorExtractor(
                 briskDescriptionRotationInvariance_,
-                briskDescriptionScaleInvariance_, 
-                brisk::BriskDescriptorExtractor::briskV2)));
+                briskDescriptionScaleInvariance_)));
   }
-  for (auto it = featureDetectorMutexes_.begin();
-      it != featureDetectorMutexes_.end(); ++it) {
-    (*it)->unlock();
-  }
+}
+
+void Frontend::initORBFeatureDetectorDescriptor()
+{
+    featureDetectorDescriptor_.clear();
+
+    for ( int i = 0; i < numCameras_; ++i )
+    {
+        featureDetectorDescriptor_.push_back( std::shared_ptr<cv::Feature2D>( \
+            new orb::ORBDetectorDescriptor( ))); // Use default parameter
+    }
 }
 
 }  // namespace okvis

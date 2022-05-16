@@ -162,6 +162,16 @@ class MultiFrame
   inline int describe(size_t cameraIdx,
                       const Eigen::Vector3d & extractionDirection =
                           Eigen::Vector3d(0, 0, 1));
+
+  /**
+   * @brief Detect & describe keypoint
+   * 
+   * @param cameraIdx The camera index.
+   * @return the number of detected points. 
+   */
+  inline int detectAndDescribe( size_t cameraIdx );
+
+
   /// \brief Describe keypoints. This uses virtual function calls.
   ///        That's a negligibly small overhead for many detections.
   /// \tparam GEOMETRY_T The type for the camera geometry requested.
@@ -262,7 +272,7 @@ class MultiFrame
     return cameraSystem_.hasOverlap(cameraIndexSeenBy, cameraIndex);
   }
 
-  
+
   std::vector<Frame, Eigen::aligned_allocator<Frame>> frames_;  ///< the individual frames
 
  protected:
