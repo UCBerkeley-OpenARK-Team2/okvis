@@ -86,15 +86,22 @@ Frontend::Frontend(size_t numCameras)
     // Set feature type based on enviroment variable
     // usage: export OKVIS_FEATURE_TYPE=BRISK
     //        export OKVIS_FEATURE_TYPE=ORB
-    std::string feature_type_str = std::getenv("OKVIS_FEATURE_TYPE");
-    if ( feature_type_str == "ORB" || feature_type_str == "orb" )
+    if ( std::getenv("OKVIS_FEATURE_TYPE") != nullptr )
     {
-      feature_type = FEATURE_TYPE::ORB;
+      std::string feature_type_str = std::getenv("OKVIS_FEATURE_TYPE");
+      if ( feature_type_str == "ORB" || feature_type_str == "orb" )
+      {
+        feature_type = FEATURE_TYPE::ORB;
+      }
+      // Use brisk by default
+      else
+      {
+        feature_type = FEATURE_TYPE::BRISK;
+      }
     }
-    // Use brisk by default
     else
     {
-      feature_type = FEATURE_TYPE::BRISK;
+      feature_type = FEATURE_TYPE::ORB;
     }
 
     switch( feature_type )
