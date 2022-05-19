@@ -44,7 +44,7 @@
 #include <okvis/Frontend.hpp>
 
 #include <brisk/brisk.h>
-#include <okvis/orb.h>
+#include <okvis/orb.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <glog/logging.h>
 

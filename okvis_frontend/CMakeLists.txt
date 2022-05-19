@@ -28,7 +28,7 @@ add_library(${PROJECT_NAME}
   src/FrameNoncentralAbsoluteAdapter.cpp
   src/FrameRelativeAdapter.cpp
   src/orb.cpp
-  include/okvis/orb.h
+  include/okvis/orb.hpp
   include/okvis/Frontend.hpp
   include/okvis/VioKeyframeWindowMatchingAlgorithm.hpp
   include/okvis/triangulation/stereo_triangulation.hpp

@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <opencv2/opencv.hpp>
-#include <okvis/orb.h>
+#include <okvis/orb.hpp>
 
 namespace orb
 {
